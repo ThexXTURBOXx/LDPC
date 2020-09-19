@@ -7,10 +7,12 @@ public class LDPC {
 
     private final BinaryMatrix g;
     private final BinaryMatrix h;
-    private final double bitflipChance = 0.1;
-    private final int maxIterations = 20;
+    private final double bitflipChance;
+    private final int maxIterations;
 
-    public LDPC(BinaryMatrix h) {
+    public LDPC(BinaryMatrix h, double bitflipChance, int maxIterations) {
+        this.bitflipChance = bitflipChance;
+        this.maxIterations = maxIterations;
         this.h = h;
         g = getGeneratorMatrix(h);
     }
@@ -35,6 +37,7 @@ public class LDPC {
         return msg.mult(g);
     }
 
+    @SuppressWarnings("unchecked")
     public BinaryMatrix decode(BinaryMatrix msg) {
         int m = h.getRows();
         int n = h.getCols();
@@ -78,7 +81,7 @@ public class LDPC {
                     double prod = 1;
                     for (int k : N[i]) {
                         if (k != j) {
-                            prod *= Math.tanh(lambda[i][k] / 2.0);
+                            prod *= Math.tanh(lambda[i][k] / 2);
                         }
                     }
                     Lambda[i][j] = 2 * atanh(prod);
@@ -120,16 +123,7 @@ public class LDPC {
     }
 
     private double atanh(double x) {
-        return 0.5 * Math.log((1.0 + x) / (1.0 - x));
-    }
-
-    private static class Coord {
-        private final int row, col;
-
-        private Coord(int row, int col) {
-            this.row = row;
-            this.col = col;
-        }
+        return Math.log((1 + x) / (1 - x)) / 2;
     }
 
 }

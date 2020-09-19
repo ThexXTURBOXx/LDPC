@@ -13,7 +13,7 @@ public class Test {
         int[][] dataMsg = new int[][]{{1, 1, 1, 0, 0, 1}};
 
         BinaryMatrix H = new BinaryMatrix(dataParityCheck);
-        LDPC ldpc = new LDPC(H);
+        LDPC ldpc = new LDPC(H, 0.1, 20);
         BinaryMatrix MSG = new BinaryMatrix(dataMsg);
         BinaryMatrix ENC = ldpc.encode(MSG);
 
