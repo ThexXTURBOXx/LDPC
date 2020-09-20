@@ -100,14 +100,23 @@ public class LDPC {
     /**
      * Calculates the LLR (log-likelihood ratio) of the given binary value.
      *
-     * @param value The binary value.
+     * @param value The binary value to calculate its LLR value.
      * @return The corresponding LLR value using this LDPC instance's
      *         {@link #bitflipChance}.
      */
     public double getLLR(boolean value) {
-        return Math.log(value
-                ? (bitflipChance / (1 - bitflipChance))
-                : ((1 - bitflipChance) / bitflipChance));
+        return getLLR(value ? 1 : 0);
+    }
+
+    /**
+     * Calculates the LLR (log-likelihood ratio) of the given value.
+     *
+     * @param value The value to calculate its LLR value.
+     * @return The corresponding LLR value using this LDPC instance's
+     *         {@link #bitflipChance}.
+     */
+    public double getLLR(double value) {
+        return Math.log((1 - bitflipChance - value) / (bitflipChance - value));
     }
 
     /**
