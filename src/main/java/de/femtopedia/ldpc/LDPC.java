@@ -2,14 +2,69 @@ package de.femtopedia.ldpc;
 
 import java.util.ArrayList;
 import java.util.List;
+import lombok.Getter;
+import lombok.Setter;
 
+/**
+ * Provides LDPC code functionality using the {@link BinaryMatrix} class and the
+ * sum-product-algorithm (belief propagation).
+ */
 public class LDPC {
 
+    /**
+     * The generator matrix to use.
+     */
+    @Getter
     private final BinaryMatrix g;
-    private final BinaryMatrix h;
-    private final double bitflipChance;
-    private final int maxIterations;
 
+    /**
+     * The parity check matrix to use.
+     */
+    @Getter
+    private final BinaryMatrix h;
+
+    /**
+     * The chance of a bitflip occurring.
+     */
+    @Getter
+    @Setter
+    private double bitflipChance;
+
+    /**
+     * The maximum iterations for the algorithm.
+     */
+    @Getter
+    @Setter
+    private int maxIterations;
+
+    /**
+     * Initializes the LDPC instance using the given parity check matrix.
+     *
+     * @param h The parity check matrix to use.
+     */
+    public LDPC(BinaryMatrix h) {
+        this(h, 0.1, 20);
+    }
+
+    /**
+     * Initializes the LDPC instance using the given parity check matrix and
+     * bitflip chance.
+     *
+     * @param h             The parity check matrix to use.
+     * @param bitflipChance The chance of a bitflip occurring.
+     */
+    public LDPC(BinaryMatrix h, double bitflipChance) {
+        this(h, bitflipChance, 20);
+    }
+
+    /**
+     * Initializes the LDPC instance using the given parity check matrix,
+     * bitflip chance and maximum amount of iterations for the algorithm.
+     *
+     * @param h             The parity check matrix to use.
+     * @param bitflipChance The chance of a bitflip occurring.
+     * @param maxIterations The maximum iterations for the algorithm.
+     */
     public LDPC(BinaryMatrix h, double bitflipChance, int maxIterations) {
         this.bitflipChance = bitflipChance;
         this.maxIterations = maxIterations;
@@ -17,111 +72,234 @@ public class LDPC {
         g = getGeneratorMatrix(h);
     }
 
+    /**
+     * Returns the corresponding generator matrix for the given parity check
+     * matrix.
+     *
+     * @param h The parity check matrix to calculate its generator matrix.
+     * @return The corresponding generator matrix.
+     */
     public static BinaryMatrix getGeneratorMatrix(BinaryMatrix h) {
         int k = h.getCols() - h.getRows();
-        BinaryMatrix A = h.getColumns(0, k);
-        BinaryMatrix B = h.getColumns(k, h.getCols());
+        BinaryMatrix a = h.getColumns(0, k);
+        BinaryMatrix b = h.getColumns(k, h.getCols());
         return BinaryMatrix.concat(BinaryMatrix.eye(k),
-                A.transpose().mult(B.transpose().inv()));
+                a.transpose().mult(b.transpose().inv()));
     }
 
-    public BinaryMatrix getGeneratorMatrix() {
-        return g;
-    }
-
-    public BinaryMatrix getParityCheckMatrix() {
-        return h;
-    }
-
+    /**
+     * Encodes the given binary message using this LDPC instance.
+     *
+     * @param msg The message to encode.
+     * @return The encoded message as boolean/binary matrix.
+     */
     public BinaryMatrix encode(BinaryMatrix msg) {
         return msg.mult(g);
     }
 
+    /**
+     * Calculates the LLR (log-likelihood ratio) of the given binary value.
+     *
+     * @param value The binary value.
+     * @return The corresponding LLR value using this LDPC instance's
+     *         {@link #bitflipChance}.
+     */
+    public double getLLR(boolean value) {
+        return Math.log(value
+                ? (bitflipChance / (1 - bitflipChance))
+                : ((1 - bitflipChance) / bitflipChance));
+    }
+
+    /**
+     * Tries to decode the given binary/boolean message using the sum-product-
+     * algorithm/belief propagation.
+     *
+     * @param message The message to decode.
+     * @return The possibly decoded message.
+     */
+    public BinaryMatrix decode(BinaryMatrix message) {
+        int n = h.getCols();
+
+        double[] msg = new double[n];
+        for (int i = 0; i < n; i++) {
+            msg[i] = getLLR(message.getEntry(0, i));
+        }
+
+        return decode(msg);
+    }
+
+    /**
+     * Tries to decode the given LLR value message using the sum-product-
+     * algorithm/belief propagation.
+     *
+     * @param msg The message to decode.
+     * @return The possibly decoded message.
+     */
     @SuppressWarnings("unchecked")
-    public BinaryMatrix decode(BinaryMatrix msg) {
+    public BinaryMatrix decode(double[] msg) {
         int m = h.getRows();
         int n = h.getCols();
-        double[] L = new double[n];
-        for (int i = 0; i < n; i++) {
-            L[i] = Math.log(msg.getEntry(0, i)
-                    ? (bitflipChance / (1 - bitflipChance))
-                    : ((1 - bitflipChance) / bitflipChance));
-        }
-        List<Integer>[] M = new List[n];
-        List<Integer>[] N = new List[m];
-        for (int i = 0; i < n; i++) {
-            M[i] = new ArrayList<>();
 
-        }
-        for (int i = 0; i < m; i++) {
-            N[i] = new ArrayList<>();
-            for (int j = 0; j < n; j++) {
-                if (h.getEntry(i, j)) {
-                    M[j].add(i);
-                    N[i].add(j);
-                }
-            }
-        }
-        double[][] lambda = new double[m][n];
-        double[][] Lambda = new double[m][n];
-        for (int i = 0; i < m; i++) {
-            for (int j : N[i]) {
-                lambda[i][j] = L[j];
-            }
-        }
+        List<Integer>[] colAdj = new List[n];
+        List<Integer>[] rowAdj = new List[m];
+        initAdjacencyMatrices(colAdj, rowAdj);
+
+        double[][] toCheckNodes = new double[m][n];
+        double[][] fromCheckNodes = new double[m][n];
+        initCheckNodes(rowAdj, toCheckNodes, msg);
 
         int iter = 0;
-        BinaryMatrix estimate = msg;
-        BinaryMatrix syndrome = msg.mult(h.transpose());
-        while (iter++ < maxIterations
-                && syndrome.reduce(0, Integer::sum) != 0) {
+        BinaryMatrix estimate = decisionStep(msg);
+        BinaryMatrix syndrome = estimate.mult(h.transpose());
+        while (iter++ < maxIterations && syndrome.sum() != 0) {
             // Step (i)
-            for (int i = 0; i < m; i++) {
-                for (int j : N[i]) {
-                    double prod = 1;
-                    for (int k : N[i]) {
-                        if (k != j) {
-                            prod *= Math.tanh(lambda[i][k] / 2);
-                        }
-                    }
-                    Lambda[i][j] = 2 * atanh(prod);
-                }
-            }
+            updateSymbolNodes(rowAdj, toCheckNodes, fromCheckNodes);
 
             // Step (ii)
-            for (int j = 0; j < n; j++) {
-                for (int i : M[j]) {
-                    double sum = 0;
-                    for (int k : M[j]) {
-                        if (k != i) {
-                            sum += Lambda[k][j];
-                        }
-                    }
-                    lambda[i][j] = L[j] + sum;
-                }
-            }
-
-            double[] l = new double[n];
-            for (int i = 0; i < n; i++) {
-                double sum = 0;
-                for (int k : M[i]) {
-                    sum += Lambda[k][i];
-                }
-                l[i] = L[i] + sum;
-            }
+            updateCheckNodes(colAdj, toCheckNodes, fromCheckNodes, msg);
+            double[] estimateLLR = getEstimate(colAdj, fromCheckNodes, msg);
 
             // Step (iii)
-            boolean[][] estimateData = new boolean[1][n];
-            for (int i = 0; i < n; i++) {
-                estimateData[0][i] = l[i] < 0;
-            }
-            estimate = new BinaryMatrix(estimateData);
+            estimate = decisionStep(estimateLLR);
             syndrome = estimate.mult(h.transpose());
         }
 
         return estimate;
     }
 
+    /**
+     * Initializes the adjacency matrices from the parity check matrix
+     * {@link #h}.
+     *
+     * @param colAdj The set saving for every column n its indices of 1's.
+     * @param rowAdj The set saving for every row m its indices of 1's.
+     */
+    private void initAdjacencyMatrices(List<Integer>[] colAdj,
+                                       List<Integer>[] rowAdj) {
+        int n = h.getCols();
+
+        for (int i = 0; i < n; i++) {
+            colAdj[i] = new ArrayList<>();
+        }
+        for (int i = 0; i < h.getRows(); i++) {
+            rowAdj[i] = new ArrayList<>();
+            for (int j = 0; j < n; j++) {
+                if (h.getEntry(i, j)) {
+                    colAdj[j].add(i);
+                    rowAdj[i].add(j);
+                }
+            }
+        }
+    }
+
+    /**
+     * Initializes the check node values.
+     *
+     * @param rowAdj  The set saving for every row m its indices of 1's.
+     * @param ingoing The ingoing messages to the check nodes.
+     * @param msg     The originally received message.
+     */
+    private void initCheckNodes(List<Integer>[] rowAdj, double[][] ingoing,
+                                double[] msg) {
+        for (int i = 0; i < h.getRows(); i++) {
+            for (int j : rowAdj[i]) {
+                ingoing[i][j] = msg[j];
+            }
+        }
+    }
+
+    /**
+     * Updates the symbol nodes' values.
+     *
+     * @param rowAdj   The set saving for every row m its indices of 1's.
+     * @param ingoing  The ingoing messages to the check nodes.
+     * @param outgoing The outgoing messages from the check nodes.
+     */
+    private void updateSymbolNodes(List<Integer>[] rowAdj, double[][] ingoing,
+                                   double[][] outgoing) {
+        for (int i = 0; i < h.getRows(); i++) {
+            for (int j : rowAdj[i]) {
+                double prod = 1;
+                for (int k : rowAdj[i]) {
+                    if (k != j) {
+                        prod *= Math.tanh(ingoing[i][k] / 2);
+                    }
+                }
+                outgoing[i][j] = 2 * atanh(prod);
+            }
+        }
+    }
+
+    /**
+     * Updates the check nodes' values.
+     *
+     * @param colAdj   The set saving for every column n its indices of 1's.
+     * @param ingoing  The ingoing messages to the check nodes.
+     * @param outgoing The outgoing messages from the check nodes.
+     * @param msg      The originally received message.
+     */
+    private void updateCheckNodes(List<Integer>[] colAdj, double[][] ingoing,
+                                  double[][] outgoing, double[] msg) {
+        for (int j = 0; j < h.getCols(); j++) {
+            for (int i : colAdj[j]) {
+                double sum = 0;
+                for (int k : colAdj[j]) {
+                    if (k != i) {
+                        sum += outgoing[k][j];
+                    }
+                }
+                ingoing[i][j] = msg[j] + sum;
+            }
+        }
+    }
+
+    /**
+     * Returns an estimate of the decoded matrix based on the current nodes'
+     * values.
+     *
+     * @param colAdj   The set saving for every column n its indices of 1's.
+     * @param outgoing The outgoing messages from the check nodes.
+     * @param msg      The originally received message.
+     * @return The current LLR value estimate.
+     */
+    private double[] getEstimate(List<Integer>[] colAdj, double[][] outgoing,
+                                 double[] msg) {
+        int n = h.getCols();
+
+        double[] l = new double[n];
+        for (int i = 0; i < n; i++) {
+            double sum = 0;
+            for (int k : colAdj[i]) {
+                sum += outgoing[k][i];
+            }
+            l[i] = msg[i] + sum;
+        }
+        return l;
+    }
+
+    /**
+     * Decides for each LLR value whether it is more likely that it is a 0 or 1.
+     * This return value represents the current estimate for the decoded message
+     * in binary form.
+     *
+     * @param llrValues The LLR values to decide on.
+     * @return The current estimate for the decoded message in binary form.
+     */
+    private BinaryMatrix decisionStep(double[] llrValues) {
+        int n = llrValues.length;
+        boolean[][] estimateData = new boolean[1][n];
+        for (int i = 0; i < n; i++) {
+            estimateData[0][i] = llrValues[i] < 0;
+        }
+        return new BinaryMatrix(estimateData);
+    }
+
+    /**
+     * Calculates the arctanh(x) of a given value x.
+     *
+     * @param x The value to calculate the arctanh(x) of.
+     * @return The arctanh(x) of the given value x.
+     */
     private double atanh(double x) {
         return Math.log((1 + x) / (1 - x)) / 2;
     }
