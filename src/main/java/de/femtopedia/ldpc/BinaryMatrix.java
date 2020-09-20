@@ -3,6 +3,7 @@ package de.femtopedia.ldpc;
 import java.util.Arrays;
 import java.util.function.IntBinaryOperator;
 import java.util.stream.IntStream;
+import lombok.Getter;
 
 /**
  * Represents a Matrix with binary values, i.e. 0 or 1 in each sot.
@@ -17,11 +18,13 @@ public class BinaryMatrix {
     /**
      * The amount of rows cached for better access.
      */
+    @Getter
     private final int rows;
 
     /**
      * The amount of columns cached for better access.
      */
+    @Getter
     private final int cols;
 
     /**
@@ -87,24 +90,6 @@ public class BinaryMatrix {
             }
         }
         return new BinaryMatrix(newData);
-    }
-
-    /**
-     * Returns this matrix's number of rows.
-     *
-     * @return The number of rows.
-     */
-    public int getRows() {
-        return rows;
-    }
-
-    /**
-     * Returns this matrix's number of rows.
-     *
-     * @return The number of columns.
-     */
-    public int getCols() {
-        return cols;
     }
 
     /**
@@ -239,7 +224,7 @@ public class BinaryMatrix {
 
         // Gauss
         for (int i = 0; i < rows; i++) {
-            ArrayUtils.insertionSortParallel(newData, eye);
+            ArrayUtils.parallelSortDesc(newData, eye);
             for (int j = i + 1; j < rows; j++) {
                 if (gaussStep(newData, eye, i, j)) {
                     break;

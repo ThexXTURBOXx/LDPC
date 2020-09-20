@@ -20,7 +20,7 @@ public final class ArrayUtils {
      * @param a The array to sort.
      * @param b The array to also perform the steps on.
      */
-    public static void insertionSortParallel(boolean[][] a, boolean[][] b) {
+    public static void parallelSortDesc(boolean[][] a, boolean[][] b) {
         for (int i = 0; i < a.length; i++) {
             for (int j = i; j > 0; j--) {
                 if (ArrayUtils.compare(a[j - 1], a[j]) < 0) {
