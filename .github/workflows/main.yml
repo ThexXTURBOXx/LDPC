@@ -17,6 +17,8 @@ jobs:
         uses: actions/setup-java@v1
         with:
           java-version: 1.8
+      - name: Run Checkstyle
+        run: mvn compile checkstyle:check -Dcheckstyle.config.location=https://femtopedia.de/checkstyle_new.xml
       - name: Build using Maven
         run: mvn clean install
       - name: Upload Artifact
