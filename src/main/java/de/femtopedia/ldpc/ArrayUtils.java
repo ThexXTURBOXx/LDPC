@@ -14,8 +14,17 @@ public final class ArrayUtils {
     }
 
     /**
-     * Performs insertion sort on one 2d array's rows and performs the same
-     * swaps on another array.
+     * Performs a sorting algorithm descending on one 2d array's rows.
+     *
+     * @param a The array to sort.
+     */
+    public static void sortDesc(boolean[][] a) {
+        Arrays.sort(a, (b1, b2) -> -ArrayUtils.compare(b1, b2));
+    }
+
+    /**
+     * Performs insertion sort descending on one 2d array's rows and performs
+     * the same swaps on another array.
      *
      * @param a The array to sort.
      * @param b The array to also perform the steps on.

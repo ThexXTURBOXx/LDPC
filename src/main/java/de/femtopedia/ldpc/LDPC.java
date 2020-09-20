@@ -83,8 +83,12 @@ public class LDPC {
         int k = h.getCols() - h.getRows();
         BinaryMatrix a = h.getColumns(0, k);
         BinaryMatrix b = h.getColumns(k, h.getCols());
-        return BinaryMatrix.concat(BinaryMatrix.eye(k),
-                a.transpose().mult(b.transpose().inv()));
+        if (b.isInvertible()) {
+            return BinaryMatrix.concat(BinaryMatrix.eye(k),
+                    a.transpose().mult(b.transpose().inv()));
+        } else {
+            throw new IllegalArgumentException("Matrix B is not invertible!");
+        }
     }
 
     /**

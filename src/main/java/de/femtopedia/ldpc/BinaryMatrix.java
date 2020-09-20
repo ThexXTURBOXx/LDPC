@@ -214,6 +214,38 @@ public class BinaryMatrix {
     }
 
     /**
+     * Returns whether this matrix is invertible, i.e. its determinant is != 0.
+     *
+     * @return {@code true}, iff the matrix is invertible, {@code false}
+     *         otherwise.
+     */
+    public boolean isInvertible() {
+        return det() != 0;
+    }
+
+    /**
+     * Returns this matrix's determinant, calculated via gaussian algorithm.
+     *
+     * @return This matrix's determinant.
+     */
+    public int det() {
+        boolean[][] newData = getData();
+
+        // Gauss
+        for (int i = 0; i < rows; i++) {
+            ArrayUtils.sortDesc(newData);
+            for (int j = i + 1; j < rows; j++) {
+                if (gaussStep(newData, i, j)) {
+                    break;
+                }
+            }
+        }
+
+        return Math.abs(IntStream.range(0, rows).map(i -> newData[i][i] ? 1 : 0)
+                .reduce(0, Integer::sum));
+    }
+
+    /**
      * Calculates and returns the inverse matrix using Gauss-Jordan-Elimination.
      *
      * @return The inverse matrix.
@@ -242,6 +274,18 @@ public class BinaryMatrix {
     }
 
     /**
+     * Helper method performing one Gaussian step.
+     *
+     * @param data The matrix to perform the gaussian algorithm on.
+     * @param i    The current comparing row index.
+     * @param j    The current elimination row index.
+     * @return {@code true} if no change was made, {@code false} otherwise.
+     */
+    private boolean gaussStep(boolean[][] data, int i, int j) {
+        return gaussStep(data, null, i, j);
+    }
+
+    /**
      * Helper method performing one Gaussian step for 2 matrices simultaneously.
      *
      * @param data The first matrix to perform the gaussian algorithm on.
@@ -254,7 +298,9 @@ public class BinaryMatrix {
         boolean[] nextRow = data[j];
         if (nextRow[i]) {
             ArrayUtils.xor(nextRow, data[i]);
-            ArrayUtils.xor(eye[j], eye[i]);
+            if (eye != null) {
+                ArrayUtils.xor(eye[j], eye[i]);
+            }
             return false;
         }
         return true;
