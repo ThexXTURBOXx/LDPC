@@ -1,6 +1,8 @@
 package de.femtopedia.ldpc;
 
 import java.util.Arrays;
+import java.util.List;
+import java.util.function.BiFunction;
 import java.util.function.IntBinaryOperator;
 import java.util.stream.IntStream;
 import lombok.Getter;
@@ -69,13 +71,27 @@ public class BinaryMatrix {
         return new BinaryMatrix(data);
     }
 
+    public static BinaryMatrix
+    fromFunction(int m, int n, BiFunction<Integer, Integer, Boolean> f) {
+        return fromIntFunction(m, n, (i, j) -> f.apply(i, j) ? 1 : 0);
+    }
+
+    public static BinaryMatrix
+    fromIntFunction(int m, int n, BiFunction<Integer, Integer, Integer> f) {
+        int[][] data = IntStream.range(0, m)
+                .mapToObj(i -> IntStream.range(0, n)
+                        .map(j -> f.apply(i, j)).toArray())
+                .toArray(int[][]::new);
+        return new BinaryMatrix(data);
+    }
+
     /**
      * Concatenates matrices' rows to one big matrix.
      *
      * @param matrices The matrices to concatenate.
      * @return The concatenated matrix.
      */
-    public static BinaryMatrix concat(BinaryMatrix... matrices) {
+    public static BinaryMatrix horizConcat(BinaryMatrix... matrices) {
         int rows = matrices[0].rows;
         int cols = Arrays.stream(matrices).mapToInt(BinaryMatrix::getCols)
                 .reduce(0, Integer::sum);
@@ -87,6 +103,27 @@ public class BinaryMatrix {
                 for (int k = 0; k < m.cols; k++) {
                     newData[i][j++] = m.data[i][k];
                 }
+            }
+        }
+        return new BinaryMatrix(newData);
+    }
+
+    /**
+     * Concatenates matrices' columns to one big matrix.
+     *
+     * @param matrices The matrices to concatenate.
+     * @return The concatenated matrix.
+     */
+    public static BinaryMatrix vertConcat(BinaryMatrix... matrices) {
+        int rows = Arrays.stream(matrices).mapToInt(BinaryMatrix::getRows)
+                .reduce(0, Integer::sum);
+        int cols = matrices[0].cols;
+        boolean[][] newData = new boolean[rows][cols];
+
+        int i = 0;
+        for (BinaryMatrix m : matrices) {
+            for (int j = 0; j < m.rows; j++) {
+                newData[i++] = m.data[j].clone();
             }
         }
         return new BinaryMatrix(newData);
@@ -134,6 +171,15 @@ public class BinaryMatrix {
      */
     public int getEntryInt(int row, int col) {
         return data[row][col] ? 1 : 0;
+    }
+
+    public BinaryMatrix permuteColumns(List<Integer> permutation) {
+        int[][] data = IntStream.range(0, rows).mapToObj(i ->
+                IntStream.range(0, cols)
+                        .map(j -> this.data[i][permutation.get(j)] ? 1 : 0)
+                        .toArray())
+                .toArray(int[][]::new);
+        return new BinaryMatrix(data);
     }
 
     /**
