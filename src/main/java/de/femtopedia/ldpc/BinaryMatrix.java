@@ -71,11 +71,31 @@ public class BinaryMatrix {
         return new BinaryMatrix(data);
     }
 
+    /**
+     * Generates a binary matrix from the given index-to-value functions.
+     *
+     * @param m Amount of the matrix's rows.
+     * @param n Amount of the matrix's columns.
+     * @param f A function from which to generate the matrix from, mapping
+     *          indices to values.
+     * @return The binary matrix generated from the given index-to-value
+     *         function.
+     */
     public static BinaryMatrix
     fromFunction(int m, int n, BiFunction<Integer, Integer, Boolean> f) {
         return fromIntFunction(m, n, (i, j) -> f.apply(i, j) ? 1 : 0);
     }
 
+    /**
+     * Generates a binary matrix from the given index-to-value functions.
+     *
+     * @param m Amount of the matrix's rows.
+     * @param n Amount of the matrix's columns.
+     * @param f A function from which to generate the matrix from, mapping
+     *          indices to values.
+     * @return The binary matrix generated from the given index-to-value
+     *         function.
+     */
     public static BinaryMatrix
     fromIntFunction(int m, int n, BiFunction<Integer, Integer, Integer> f) {
         int[][] data = IntStream.range(0, m)
@@ -173,6 +193,13 @@ public class BinaryMatrix {
         return data[row][col] ? 1 : 0;
     }
 
+    /**
+     * Permutes the matrix's columns according to the given permutation.
+     *
+     * @param permutation The column permutation to apply to this matrix.
+     * @return A matrix representing this matrix with the given permutation
+     *         applied.
+     */
     public BinaryMatrix permuteColumns(List<Integer> permutation) {
         int[][] data = IntStream.range(0, rows).mapToObj(i ->
                 IntStream.range(0, cols)
