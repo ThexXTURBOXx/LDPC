@@ -315,7 +315,7 @@ public class BinaryMatrix {
         }
 
         return Math.abs(IntStream.range(0, rows).map(i -> newData[i][i] ? 1 : 0)
-                .reduce(0, Integer::sum));
+                .reduce(1, (x, y) -> x * y));
     }
 
     /**
