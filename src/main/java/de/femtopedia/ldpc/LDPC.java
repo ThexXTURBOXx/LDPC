@@ -1,10 +1,7 @@
 package de.femtopedia.ldpc;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -76,40 +73,6 @@ public class LDPC {
     }
 
     /**
-     * Generates a Gallager Matrix from the given parameters using the Gallager
-     * Ensemble Algorithm.
-     *
-     * @param k  Length of the messages to decode.
-     * @param l  Amount of redundancy bits to use.
-     * @param dv Amount of 1's per column, i.e. the amount of parity check sets.
-     * @return A Gallager Matrix from the given parameters.
-     */
-    public static BinaryMatrix generateGallagerMatrix(int k, int l, int dv) {
-        int n = k + l;
-        int m = n - k;
-        int dc = dv * n / m;
-
-        if ((m % dv) != 0 || ((dv * n) % m) != 0) {
-            throw new IllegalArgumentException("Invalid parameters for the "
-                    + "Gallager ensemble algorithm!");
-        }
-
-        BinaryMatrix[] matrices = new BinaryMatrix[dv];
-        matrices[0] = BinaryMatrix.fromFunction(m / dv, n,
-                (i, j) -> i * dc <= j && j < (i + 1) * dc);
-
-        for (int i = 1; i < dv; i++) {
-            List<Integer> permutation = IntStream.range(0, n).boxed()
-                    .collect(Collectors.toList());
-            Collections.shuffle(permutation);
-
-            matrices[i] = matrices[0].permuteColumns(permutation);
-        }
-
-        return BinaryMatrix.vertConcat(matrices);
-    }
-
-    /**
      * Returns the corresponding generator matrix for the given parity check
      * matrix.
      *
@@ -117,15 +80,15 @@ public class LDPC {
      * @return The corresponding generator matrix.
      */
     public static BinaryMatrix getGeneratorMatrix(BinaryMatrix h) {
-        int k = h.getCols() - h.getRows();
+        int hCols = h.getCols();
+        int k = hCols - h.getRows();
         BinaryMatrix a = h.getColumns(0, k);
-        BinaryMatrix b = h.getColumns(k, h.getCols());
-        if (b.isInvertible()) {
-            return BinaryMatrix.horizConcat(BinaryMatrix.eye(k),
-                    a.transpose().mult(b.transpose().inv()));
-        } else {
+        BinaryMatrix b = h.getColumns(k, hCols);
+        if (!b.isInvertible()) {
             throw new IllegalArgumentException("Matrix B is not invertible!");
         }
+        return BinaryMatrix.horizConcat(BinaryMatrix.eye(k),
+                a.transpose().mult(b.transpose().inv()));
     }
 
     /**
@@ -336,12 +299,8 @@ public class LDPC {
      * @return The current estimate for the decoded message in binary form.
      */
     private BinaryMatrix decisionStep(double[] llrValues) {
-        int n = llrValues.length;
-        boolean[][] estimateData = new boolean[1][n];
-        for (int i = 0; i < n; i++) {
-            estimateData[0][i] = llrValues[i] < 0;
-        }
-        return new BinaryMatrix(estimateData);
+        return BinaryMatrix.fromFunction(1, llrValues.length,
+                (i, j) -> llrValues[j] < 0);
     }
 
     /**

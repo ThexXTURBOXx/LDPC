@@ -2,6 +2,7 @@ package de.femtopedia.ldpc;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.IntBinaryOperator;
 import java.util.stream.IntStream;
@@ -58,17 +59,24 @@ public class BinaryMatrix {
     }
 
     /**
+     * Constructs the zero matrix of the given size.
+     *
+     * @param m The row size to initialize with.
+     * @param n The column size to initialize with.
+     * @return The identity matrix of size m x n.
+     */
+    public static BinaryMatrix zero(int m, int n) {
+        return fromIntFunction(m, n, (i, j) -> 0);
+    }
+
+    /**
      * Constructs the identity matrix of the given size.
      *
      * @param n The size to initialize with.
      * @return The identity matrix of size n.
      */
     public static BinaryMatrix eye(int n) {
-        boolean[][] data = new boolean[n][n];
-        for (int i = 0; i < n; i++) {
-            data[i][i] = true;
-        }
-        return new BinaryMatrix(data);
+        return fromFunction(n, n, Integer::equals);
     }
 
     /**
@@ -81,8 +89,8 @@ public class BinaryMatrix {
      * @return The binary matrix generated from the given index-to-value
      *         function.
      */
-    public static BinaryMatrix
-    fromFunction(int m, int n, BiFunction<Integer, Integer, Boolean> f) {
+    public static BinaryMatrix fromFunction(int m, int n, BiFunction<Integer,
+            Integer, Boolean> f) {
         return fromIntFunction(m, n, (i, j) -> f.apply(i, j) ? 1 : 0);
     }
 
@@ -96,13 +104,33 @@ public class BinaryMatrix {
      * @return The binary matrix generated from the given index-to-value
      *         function.
      */
-    public static BinaryMatrix
-    fromIntFunction(int m, int n, BiFunction<Integer, Integer, Integer> f) {
+    public static BinaryMatrix fromIntFunction(int m, int n, BiFunction<Integer,
+            Integer, Integer> f) {
         int[][] data = IntStream.range(0, m)
                 .mapToObj(i -> IntStream.range(0, n)
                         .map(j -> f.apply(i, j)).toArray())
                 .toArray(int[][]::new);
         return new BinaryMatrix(data);
+    }
+
+    /**
+     * Generates a binary matrix from the given index-to-value functions.
+     *
+     * @param m  Amount of the elementary matrices per column.
+     * @param n  Amount of the elementary matrices per row.
+     * @param mm Amount of the elementary matrices' rows.
+     * @param mn Amount of the elementary matrices' columns.
+     * @param f  A function from which to generate the matrix from, mapping
+     *           indices to values.
+     * @return The binary matrix generated from the given index-to-value
+     *         function.
+     */
+    public static BinaryMatrix fromMatrixFunction(int m, int n, int mm, int mn,
+                                                  BiFunction<Integer, Integer,
+                                                          BinaryMatrix> f) {
+        return fromIntFunction(m * mm, n * mn,
+                (i, j) -> f.apply(i / mm, j / mn)
+                        .getEntryInt(i % mm, j % mn));
     }
 
     /**
@@ -191,6 +219,17 @@ public class BinaryMatrix {
      */
     public int getEntryInt(int row, int col) {
         return data[row][col] ? 1 : 0;
+    }
+
+    /**
+     * Shifts the matrix circularly to the right for the given amount of steps.
+     *
+     * @param shift The amount of shifts to apply.
+     * @return The shifted matrix.
+     */
+    public BinaryMatrix shiftRight(int shift) {
+        return BinaryMatrix.fromFunction(rows, cols, (i, j) ->
+                data[i][(j - shift + cols) % cols]);
     }
 
     /**
@@ -287,6 +326,36 @@ public class BinaryMatrix {
     }
 
     /**
+     * Adds (XOR) this matrix to another matrix.
+     *
+     * @param mat The matrix to add this matrix to.
+     * @return The resulting binary matrix.
+     */
+    public BinaryMatrix add(BinaryMatrix mat) {
+        int[][] newData = IntStream.range(0, rows).mapToObj(i ->
+                IntStream.range(0, cols)
+                        .map(j -> data[i][j] ^ mat.data[i][j] ? 1 : 0)
+                        .toArray())
+                .toArray(int[][]::new);
+        return new BinaryMatrix(newData);
+    }
+
+    /**
+     * Calculates and returns the (pseudo) lower triangular matrix.
+     *
+     * @return The (pseudo) lower triangular matrix.
+     */
+    public BinaryMatrix gaussJordan() {
+        int k = getCols() - getRows();
+        boolean[][] a = getColumns(0, k).getData();
+        boolean[][] b = getColumns(k, getCols()).getData();
+
+        gaussJordanIntern(b, a);
+        return BinaryMatrix.horizConcat(new BinaryMatrix(a),
+                new BinaryMatrix(b));
+    }
+
+    /**
      * Returns whether this matrix is invertible, i.e. its determinant is != 0.
      *
      * @return {@code true}, iff the matrix is invertible, {@code false}
@@ -327,11 +396,22 @@ public class BinaryMatrix {
         boolean[][] newData = getData();
         boolean[][] eye = eye(rows).data;
 
+        gaussJordanIntern(newData, eye);
+        return new BinaryMatrix(eye);
+    }
+
+    /**
+     * Performs the Gauss-Jordan algorithm on the given matrices simultaneously.
+     *
+     * @param a The first matrix to perform the gaussian algorithm on.
+     * @param b The second matrix to perform the gaussian algorithm on.
+     */
+    private void gaussJordanIntern(boolean[][] a, boolean[][] b) {
         // Gauss
         for (int i = 0; i < rows; i++) {
-            ArrayUtils.parallelSortDesc(newData, eye);
+            ArrayUtils.parallelSortDesc(a, b);
             for (int j = i + 1; j < rows; j++) {
-                if (gaussStep(newData, eye, i, j)) {
+                if (gaussStep(a, b, i, j)) {
                     break;
                 }
             }
@@ -340,10 +420,9 @@ public class BinaryMatrix {
         // Gauss-Jordan
         for (int i = rows - 1; i > 0; i--) {
             for (int j = i - 1; j >= 0; j--) {
-                gaussStep(newData, eye, i, j);
+                gaussStep(a, b, i, j);
             }
         }
-        return new BinaryMatrix(eye);
     }
 
     /**
@@ -377,6 +456,40 @@ public class BinaryMatrix {
             return false;
         }
         return true;
+    }
+
+    /**
+     * Returns whether this object is equal to the given object.
+     *
+     * @param o The Object to compare this Object to.
+     * @return {@code true} iff this instance is equal to the given instance,
+     *         {@code false} otherwise.
+     */
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof BinaryMatrix)) {
+            return false;
+        }
+        BinaryMatrix that = (BinaryMatrix) o;
+        return rows == that.rows
+                && cols == that.cols
+                && Arrays.deepEquals(data, that.data);
+    }
+
+    /**
+     * Returns a Hash code representing this Object, respecting the hashCode()-
+     * equals() contract.
+     *
+     * @return A Hash code representing this Object.
+     */
+    @Override
+    public int hashCode() {
+        int result = Objects.hash(rows, cols);
+        result = 31 * result + Arrays.hashCode(data);
+        return result;
     }
 
     /**
