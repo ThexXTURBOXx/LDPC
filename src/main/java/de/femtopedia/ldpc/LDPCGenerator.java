@@ -51,7 +51,7 @@ public final class LDPCGenerator {
     }
 
     /**
-     * Generates a matrix with girth >= 8 (free from 4- and 6-cycles).
+     * Generates a matrix with girth {@literal >}= 8 (free from 4 and 6-cycles).
      *
      * @param v The general size of the matrix.
      * @param p The expansion factor.
