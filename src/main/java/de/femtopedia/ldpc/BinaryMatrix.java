@@ -9,7 +9,7 @@ import java.util.stream.IntStream;
 import lombok.Getter;
 
 /**
- * Represents a Matrix with binary values, i.e. 0 or 1 in each sot.
+ * Represents a Matrix with binary values, i.e. 0 or 1 in each slot.
  */
 public class BinaryMatrix {
 
@@ -53,6 +53,10 @@ public class BinaryMatrix {
      * @param data The data to initialize with.
      */
     public BinaryMatrix(boolean[][] data) {
+        if (data.length <= 0 || data[0].length <= 0) {
+            throw new IllegalArgumentException("Invalid matrix size");
+        }
+
         rows = data.length;
         cols = data[0].length;
         this.data = data;

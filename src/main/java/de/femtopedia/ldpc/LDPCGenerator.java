@@ -2,7 +2,7 @@ package de.femtopedia.ldpc;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Random;
+import java.util.SplittableRandom;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -94,10 +94,13 @@ public final class LDPCGenerator {
         int m = h2.getRows();
         int n = h2.getCols();
 
+        BinaryMatrix zero = BinaryMatrix.zero(p, p);
+
         return BinaryMatrix.fromMatrixFunction(m, n, p, p,
                 (i, j) -> h2.getEntry(i, j)
-                        ? iArr[Math.abs(new Random(i * n + j).nextInt() % p)]
-                        : BinaryMatrix.zero(p, p));
+                        ? iArr[Math.abs(new SplittableRandom((long) i * n + j)
+                        .nextInt() % p)]
+                        : zero);
     }
 
 }
