@@ -1,10 +1,19 @@
 package de.femtopedia.ldpc;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.SplittableRandom;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import org.bouncycastle.pqc.math.linearalgebra.GF2Matrix;
+
+import static de.femtopedia.ldpc.MatrixUtils.setBit;
+import static de.femtopedia.ldpc.MatrixUtils.zero;
 
 /**
  * Provides some methods for generating Parity Check Matrices.
@@ -15,6 +24,7 @@ public final class LDPCGenerator {
      * Don't initialize me.
      */
     private LDPCGenerator() {
+        throw new UnsupportedOperationException();
     }
 
     /**
@@ -26,6 +36,7 @@ public final class LDPCGenerator {
      * @param dv Amount of 1's per column, i.e. the amount of parity check sets.
      * @return A Gallager Matrix from the given parameters.
      */
+    @Deprecated
     public static BinaryMatrix generateGallagerMatrix(int k, int m, int dv) {
         int n = k + m;
         int dc = dv * n / m;
@@ -57,6 +68,7 @@ public final class LDPCGenerator {
      * @param p The expansion factor.
      * @return A quasi-cyclic matrix.
      */
+    @Deprecated
     public static BinaryMatrix generateCycleFreeMatrix(int v, int p) {
         BinaryMatrix[] dArr = new BinaryMatrix[v * v];
         dArr[0] = BinaryMatrix.fromFunction(v, v * v, (i, j) -> j == 0);
@@ -101,6 +113,40 @@ public final class LDPCGenerator {
                         ? iArr[Math.abs(new SplittableRandom((long) i * n + j)
                         .nextInt() % p)]
                         : zero);
+    }
+
+    /**
+     * Reads a sparse Matrix from the given alist-file.
+     * Format: http://www.inference.org.uk/mackay/codes/alist.html
+     *
+     * @param path The path to the alist file.
+     * @return The parsed {@link GF2Matrix}.
+     */
+    public static GF2Matrix readAList(Path path) {
+        try (BufferedReader reader = Files.newBufferedReader(path)) {
+            int[] dims = Arrays.stream(reader.readLine().split("\\s+"))
+                    .mapToInt(Integer::parseInt).toArray();
+            // Ignore weights
+            reader.readLine();
+            // Ignore row weights
+            reader.readLine();
+            // Ignore column weights
+            reader.readLine();
+
+            GF2Matrix mat = zero(dims[0], dims[1]);
+            for (int row = 0; row < dims[0]; row++) {
+                String line = reader.readLine();
+                final int i = row;
+                Arrays.stream(line.split("\\s+"))
+                        .mapToInt(Integer::parseInt)
+                        .filter(j -> j > 0)
+                        .forEach(j -> setBit(mat, i, j - 1));
+            }
+            return mat;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 
 }

@@ -5,12 +5,18 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.IntBinaryOperator;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import lombok.Getter;
 
 /**
  * Represents a Matrix with binary values, i.e. 0 or 1 in each slot.
+ *
+ * @deprecated We are now using
+ *         {@link org.bouncycastle.pqc.math.linearalgebra.GF2Matrix} and
+ *         {@link org.bouncycastle.pqc.math.linearalgebra.GF2Vector} instead.
  */
+@Deprecated
 public class BinaryMatrix {
 
     /**
@@ -504,15 +510,11 @@ public class BinaryMatrix {
      */
     @Override
     public String toString() {
-        String[] matStr = new String[rows];
-        for (int i = 0; i < rows; i++) {
-            String[] rowStr = new String[cols];
-            for (int j = 0; j < cols; j++) {
-                rowStr[j] = "" + (data[i][j] ? 1 : 0);
-            }
-            matStr[i] = String.join(" ", rowStr);
-        }
-        return String.join(System.lineSeparator(), matStr);
+        return Arrays.stream(data)
+                .map(b -> IntStream.range(0, cols)
+                        .mapToObj(i -> "" + (b[i] ? 1 : 0))
+                        .collect(Collectors.joining(" ")))
+                .collect(Collectors.joining(System.lineSeparator()));
     }
 
 }

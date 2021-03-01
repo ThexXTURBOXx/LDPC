@@ -1,12 +1,27 @@
 package de.femtopedia.ldpc;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.PrintStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.IntStream;
 import lombok.Getter;
 import lombok.Setter;
+import org.bouncycastle.pqc.math.linearalgebra.GF2Matrix;
+import org.bouncycastle.pqc.math.linearalgebra.GF2Vector;
+import org.bouncycastle.pqc.math.linearalgebra.Matrix;
+import org.bouncycastle.pqc.math.linearalgebra.Vector;
+
+import static de.femtopedia.ldpc.MatrixUtils.getColumns;
+import static de.femtopedia.ldpc.MatrixUtils.getEntry;
+import static de.femtopedia.ldpc.MatrixUtils.print;
 
 /**
- * Provides LDPC code functionality using the {@link BinaryMatrix} class and the
+ * Provides LDPC code functionality using the {@link GF2Matrix} class and the
  * sum-product-algorithm (belief propagation).
  */
 public class LDPC {
@@ -15,13 +30,13 @@ public class LDPC {
      * The generator matrix to use.
      */
     @Getter
-    private final BinaryMatrix g;
+    private final GF2Matrix g;
 
     /**
      * The parity check matrix to use.
      */
     @Getter
-    private final BinaryMatrix h;
+    private final GF2Matrix h;
 
     /**
      * The chance of a bitflip occurring.
@@ -38,11 +53,21 @@ public class LDPC {
     private int maxIterations;
 
     /**
+     * The file prefix to print MATLAB matrices to.
+     */
+    private final String filePrefix;
+
+    /**
+     * The current iteration count for printing MATLAB matrices.
+     */
+    private int iteration = 0;
+
+    /**
      * Initializes the LDPC instance using the given parity check matrix.
      *
      * @param h The parity check matrix to use.
      */
-    public LDPC(BinaryMatrix h) {
+    public LDPC(GF2Matrix h) {
         this(h, 0.1, 20);
     }
 
@@ -53,7 +78,7 @@ public class LDPC {
      * @param h             The parity check matrix to use.
      * @param bitflipChance The chance of a bitflip occurring.
      */
-    public LDPC(BinaryMatrix h, double bitflipChance) {
+    public LDPC(GF2Matrix h, double bitflipChance) {
         this(h, bitflipChance, 20);
     }
 
@@ -65,7 +90,22 @@ public class LDPC {
      * @param bitflipChance The chance of a bitflip occurring.
      * @param maxIterations The maximum iterations for the algorithm.
      */
-    public LDPC(BinaryMatrix h, double bitflipChance, int maxIterations) {
+    public LDPC(GF2Matrix h, double bitflipChance, int maxIterations) {
+        this(h, bitflipChance, maxIterations, null);
+    }
+
+    /**
+     * Initializes the LDPC instance using the given parity check matrix,
+     * bitflip chance and maximum amount of iterations for the algorithm.
+     *
+     * @param h             The parity check matrix to use.
+     * @param bitflipChance The chance of a bitflip occurring.
+     * @param maxIterations The maximum iterations for the algorithm.
+     * @param filePrefix    The file prefix to print MATLAB matrices to.
+     */
+    public LDPC(GF2Matrix h, double bitflipChance, int maxIterations,
+                String filePrefix) {
+        this.filePrefix = filePrefix;
         this.bitflipChance = bitflipChance;
         this.maxIterations = maxIterations;
         this.h = h;
@@ -79,16 +119,13 @@ public class LDPC {
      * @param h The parity check matrix to calculate its generator matrix.
      * @return The corresponding generator matrix.
      */
-    public static BinaryMatrix getGeneratorMatrix(BinaryMatrix h) {
-        int hCols = h.getCols();
-        int k = hCols - h.getRows();
-        BinaryMatrix a = h.getColumns(0, k);
-        BinaryMatrix b = h.getColumns(k, hCols);
-        if (!b.isInvertible()) {
-            throw new IllegalArgumentException("Matrix B is not invertible!");
-        }
-        return BinaryMatrix.horizConcat(BinaryMatrix.eye(k),
-                a.transpose().mult(b.transpose().inv()));
+    public static GF2Matrix getGeneratorMatrix(GF2Matrix h) {
+        int m = h.getNumRows();
+        int n = h.getNumColumns();
+        int k = n - m;
+        Matrix a = getColumns(h, 0, k).computeTranspose();
+        Matrix b = getColumns(h, k, n).computeTranspose().computeInverse();
+        return ((GF2Matrix) a.rightMultiply(b)).extendRightCompactForm();
     }
 
     /**
@@ -97,8 +134,8 @@ public class LDPC {
      * @param msg The message to encode.
      * @return The encoded message as boolean/binary matrix.
      */
-    public BinaryMatrix encode(BinaryMatrix msg) {
-        return msg.mult(g);
+    public GF2Vector encode(GF2Vector msg) {
+        return (GF2Vector) g.leftMultiply(msg);
     }
 
     /**
@@ -130,12 +167,12 @@ public class LDPC {
      * @param message The message to decode.
      * @return The possibly decoded message.
      */
-    public BinaryMatrix decode(BinaryMatrix message) {
-        int n = h.getCols();
+    public GF2Vector decode(GF2Vector message) {
+        int n = h.getNumColumns();
 
         double[] msg = new double[n];
         for (int i = 0; i < n; i++) {
-            msg[i] = getLLR(message.getEntry(0, i));
+            msg[i] = getLLR(getEntry(message, i));
         }
 
         return decode(msg);
@@ -149,9 +186,10 @@ public class LDPC {
      * @return The possibly decoded message.
      */
     @SuppressWarnings("unchecked")
-    public BinaryMatrix decode(double[] msg) {
-        int m = h.getRows();
-        int n = h.getCols();
+    public GF2Vector decode(double[] msg) {
+        Matrix hTrans = h.computeTranspose();
+        int m = h.getNumRows();
+        int n = h.getNumColumns();
 
         List<Integer>[] colAdj = new List[n];
         List<Integer>[] rowAdj = new List[m];
@@ -162,9 +200,9 @@ public class LDPC {
         initCheckNodes(rowAdj, toCheckNodes, msg);
 
         int iter = 0;
-        BinaryMatrix estimate = decisionStep(msg);
-        BinaryMatrix syndrome = estimate.mult(h.transpose());
-        while (iter++ < maxIterations && syndrome.sum() != 0) {
+        GF2Vector estimate = decisionStep(msg);
+        Vector syndrome = hTrans.leftMultiply(estimate);
+        while (iter++ < maxIterations && !syndrome.isZero()) {
             // Step (i)
             updateSymbolNodes(rowAdj, toCheckNodes, fromCheckNodes);
 
@@ -174,7 +212,7 @@ public class LDPC {
 
             // Step (iii)
             estimate = decisionStep(estimateLLR);
-            syndrome = estimate.mult(h.transpose());
+            syndrome = hTrans.leftMultiply(estimate);
         }
 
         return estimate;
@@ -189,15 +227,15 @@ public class LDPC {
      */
     private void initAdjacencyMatrices(List<Integer>[] colAdj,
                                        List<Integer>[] rowAdj) {
-        int n = h.getCols();
+        int n = h.getNumColumns();
 
         for (int i = 0; i < n; i++) {
             colAdj[i] = new ArrayList<>();
         }
-        for (int i = 0; i < h.getRows(); i++) {
+        for (int i = 0; i < h.getNumRows(); i++) {
             rowAdj[i] = new ArrayList<>();
             for (int j = 0; j < n; j++) {
-                if (h.getEntry(i, j)) {
+                if (getEntry(h, i, j)) {
                     colAdj[j].add(i);
                     rowAdj[i].add(j);
                 }
@@ -214,7 +252,7 @@ public class LDPC {
      */
     private void initCheckNodes(List<Integer>[] rowAdj, double[][] ingoing,
                                 double[] msg) {
-        for (int i = 0; i < h.getRows(); i++) {
+        for (int i = 0; i < h.getNumRows(); i++) {
             for (int j : rowAdj[i]) {
                 ingoing[i][j] = msg[j];
             }
@@ -230,7 +268,7 @@ public class LDPC {
      */
     private void updateSymbolNodes(List<Integer>[] rowAdj, double[][] ingoing,
                                    double[][] outgoing) {
-        for (int i = 0; i < h.getRows(); i++) {
+        for (int i = 0; i < h.getNumRows(); i++) {
             for (int j : rowAdj[i]) {
                 double prod = 1;
                 for (int k : rowAdj[i]) {
@@ -253,7 +291,7 @@ public class LDPC {
      */
     private void updateCheckNodes(List<Integer>[] colAdj, double[][] ingoing,
                                   double[][] outgoing, double[] msg) {
-        for (int j = 0; j < h.getCols(); j++) {
+        for (int j = 0; j < h.getNumColumns(); j++) {
             for (int i : colAdj[j]) {
                 double sum = 0;
                 for (int k : colAdj[j]) {
@@ -277,7 +315,7 @@ public class LDPC {
      */
     private double[] getEstimate(List<Integer>[] colAdj, double[][] outgoing,
                                  double[] msg) {
-        int n = h.getCols();
+        int n = h.getNumColumns();
 
         double[] l = new double[n];
         for (int i = 0; i < n; i++) {
@@ -298,9 +336,24 @@ public class LDPC {
      * @param llrValues The LLR values to decide on.
      * @return The current estimate for the decoded message in binary form.
      */
-    private BinaryMatrix decisionStep(double[] llrValues) {
-        return BinaryMatrix.fromFunction(1, llrValues.length,
-                (i, j) -> llrValues[j] < 0);
+    private GF2Vector decisionStep(double[] llrValues) {
+        GF2Vector vec = new GF2Vector(llrValues.length);
+        IntStream.range(0, llrValues.length)
+                .filter(i -> llrValues[i] < 0)
+                .forEach(vec::setBit);
+
+        // Print as MATLAB matrix if wanted.
+        if (filePrefix != null) {
+            Path path = Paths.get(filePrefix + iteration++ + ".m");
+            try (OutputStream stream = Files.newOutputStream(path);
+                 PrintStream printer = new PrintStream(stream)) {
+                print(printer, "TEMP", vec);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        return vec;
     }
 
     /**
@@ -309,7 +362,7 @@ public class LDPC {
      * @param x The value to calculate the arctanh(x) of.
      * @return The arctanh(x) of the given value x.
      */
-    private double atanh(double x) {
+    private static double atanh(double x) {
         return Math.log((1 + x) / (1 - x)) / 2;
     }
 

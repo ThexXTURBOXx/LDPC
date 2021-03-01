@@ -11,6 +11,7 @@ public final class ArrayUtils {
      * Don't initialize me.
      */
     private ArrayUtils() {
+        throw new UnsupportedOperationException();
     }
 
     /**
