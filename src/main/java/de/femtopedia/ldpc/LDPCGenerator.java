@@ -6,6 +6,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import org.bouncycastle.pqc.math.linearalgebra.GF2Matrix;
+import org.bouncycastle.pqc.math.linearalgebra.GF2Vector;
+import org.bouncycastle.pqc.math.linearalgebra.LittleEndianConversions;
 
 import static de.femtopedia.ldpc.util.MatrixUtils.setBit;
 import static de.femtopedia.ldpc.util.MatrixUtils.zero;
@@ -73,6 +75,24 @@ public final class LDPCGenerator {
     }
 
     /**
+     * Reads the {@link GF2Matrix} from the given {@link Path}.
+     *
+     * @param path The {@link Path} to read from.
+     * @return The parsed {@link GF2Matrix}.
+     */
+    public static GF2Vector readBinaryVector(Path path) {
+        GF2Vector vector = null;
+        try {
+            byte[] bytes = Files.readAllBytes(path);
+            vector = GF2Vector.OS2VP(LittleEndianConversions.OS2IP(bytes, 0),
+                    Arrays.copyOfRange(bytes, 4, bytes.length));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return vector;
+    }
+
+    /**
      * Writes the {@link GF2Matrix} to the given {@link Path}.
      *
      * @param path The {@link Path} to write to.
@@ -84,6 +104,33 @@ public final class LDPCGenerator {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    /**
+     * Writes the {@link GF2Matrix} to the given {@link Path}.
+     *
+     * @param path The {@link Path} to write to.
+     * @param vec  The {@link GF2Matrix} to be written.
+     */
+    public static void writeBinaryVector(Path path, GF2Vector vec) {
+        try {
+            byte[] length = new byte[4];
+            LittleEndianConversions.I2OSP(vec.getLength(), length, 0);
+            Files.write(path, concatenate(length, vec.getEncoded()));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static byte[] concatenate(byte[] a, byte[] b) {
+        int aLen = a.length;
+        int bLen = b.length;
+
+        byte[] c = new byte[aLen + bLen];
+        System.arraycopy(a, 0, c, 0, aLen);
+        System.arraycopy(b, 0, c, aLen, bLen);
+
+        return c;
     }
 
 }
