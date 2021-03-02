@@ -6,8 +6,9 @@ import java.util.stream.Collectors;
 import org.bouncycastle.pqc.math.linearalgebra.GF2Matrix;
 import org.bouncycastle.pqc.math.linearalgebra.GF2Vector;
 
-import static de.femtopedia.ldpc.MatrixUtils.addNoise;
-import static de.femtopedia.ldpc.MatrixUtils.toVec;
+import static de.femtopedia.ldpc.util.MatrixUtils.addNoise;
+import static de.femtopedia.ldpc.util.MatrixUtils.print;
+import static de.femtopedia.ldpc.util.MatrixUtils.toVec;
 
 /**
  * Provides a simple example as test case.
@@ -29,7 +30,12 @@ public final class Test {
     public static void main(String[] args) {
         // This matrix comes from
         // http://www.inference.org.uk/mackay/codes/10000.10000.3.631/
-        GF2Matrix h = LDPCGenerator.readAList(Paths.get("demonstration", "A"));
+        GF2Matrix h = LDPCGenerator.readAList(Paths.get("demonstration", "H"));
+
+        // Precomputed generator matrix - can also be computed by this program
+        // by using the LDPC constructor without the parameter "g".
+        GF2Matrix g = LDPCGenerator.readBinaryMatrix(
+                Paths.get("demonstration", "G"));
 
         if (h == null) {
             System.out.println("The parsed alist file is not valid.");
@@ -39,7 +45,7 @@ public final class Test {
         // For some reason, the matrix has to be transposed beforehand.
         h = (GF2Matrix) h.computeTranspose();
 
-        LDPC ldpc = new LDPC(h, 0.1, 20, "pic");
+        LDPC ldpc = new LDPC(g, h, 0.1, 20, "pic");
         GF2Vector msg = toVec(PICTURE);
         GF2Vector encoded = ldpc.encode(msg);
 
@@ -47,7 +53,7 @@ public final class Test {
                 new SplittableRandom().ints(1500, 0, encoded.getLength())
                         .boxed().collect(Collectors.toSet()));
 
-        ldpc.decode(recvMsg);
+        print(ldpc.extractData(ldpc.decode(recvMsg), msg.getLength()));
     }
 
     /**

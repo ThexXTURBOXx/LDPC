@@ -1,5 +1,6 @@
 package de.femtopedia.ldpc;
 
+import de.femtopedia.ldpc.util.MatrixUtils;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
@@ -7,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.IntStream;
 import lombok.Getter;
@@ -16,9 +18,9 @@ import org.bouncycastle.pqc.math.linearalgebra.GF2Vector;
 import org.bouncycastle.pqc.math.linearalgebra.Matrix;
 import org.bouncycastle.pqc.math.linearalgebra.Vector;
 
-import static de.femtopedia.ldpc.MatrixUtils.getColumns;
-import static de.femtopedia.ldpc.MatrixUtils.getEntry;
-import static de.femtopedia.ldpc.MatrixUtils.print;
+import static de.femtopedia.ldpc.util.MatrixUtils.getColumns;
+import static de.femtopedia.ldpc.util.MatrixUtils.getEntry;
+import static de.femtopedia.ldpc.util.MatrixUtils.print;
 
 /**
  * Provides LDPC code functionality using the {@link GF2Matrix} class and the
@@ -96,7 +98,8 @@ public class LDPC {
 
     /**
      * Initializes the LDPC instance using the given parity check matrix,
-     * bitflip chance and maximum amount of iterations for the algorithm.
+     * bitflip chance and maximum amount of iterations for the algorithm and
+     * calculates the generator matrix.
      *
      * @param h             The parity check matrix to use.
      * @param bitflipChance The chance of a bitflip occurring.
@@ -105,11 +108,28 @@ public class LDPC {
      */
     public LDPC(GF2Matrix h, double bitflipChance, int maxIterations,
                 String filePrefix) {
-        this.filePrefix = filePrefix;
+        this(getGeneratorMatrix(h), h,
+                bitflipChance, maxIterations, filePrefix);
+    }
+
+    /**
+     * Initializes the LDPC instance using the given parity check matrix,
+     * bitflip chance and maximum amount of iterations for the algorithm using
+     * the given pre-computed generator matrix without checking its validity.
+     *
+     * @param g             The pre-computed generator matrix to use.
+     * @param h             The parity check matrix to use.
+     * @param bitflipChance The chance of a bitflip occurring.
+     * @param maxIterations The maximum iterations for the algorithm.
+     * @param filePrefix    The file prefix to print MATLAB matrices to.
+     */
+    public LDPC(GF2Matrix g, GF2Matrix h, double bitflipChance,
+                int maxIterations, String filePrefix) {
+        this.g = g;
+        this.h = h;
         this.bitflipChance = bitflipChance;
         this.maxIterations = maxIterations;
-        this.h = h;
-        g = getGeneratorMatrix(h);
+        this.filePrefix = filePrefix;
     }
 
     /**
@@ -129,13 +149,105 @@ public class LDPC {
     }
 
     /**
-     * Encodes the given binary message using this LDPC instance.
+     * Extracts the data from the given {@link GF2Vector} (may be padded).
+     *
+     * @param vec The code vector.
+     * @return The extracted data vector.
+     */
+    public GF2Vector extractData(GF2Vector vec) {
+        int dataBits = g.getNumRows();
+        int bits = dataBits + h.getNumRows();
+        int amount = vec.getLength() / bits;
+        GF2Vector data = new GF2Vector(amount * dataBits);
+
+        IntStream.range(0, amount)
+                .forEach(i -> IntStream.range(0, dataBits)
+                        .filter(j -> vec.getBit(i * bits + j) != 0)
+                        .forEach(j -> data.setBit(i * dataBits + j)));
+
+        return data;
+    }
+
+    /**
+     * Extracts the data from the given {@link GF2Vector} cut off at the given
+     * index.
+     *
+     * @param vec     The code vector.
+     * @param dataLen The end index to cut off at.
+     * @return The extracted data vector.
+     */
+    public GF2Vector extractData(GF2Vector vec, int dataLen) {
+        int dataBits = g.getNumRows();
+        int bits = dataBits + h.getNumRows();
+        int amount = vec.getLength() / bits;
+        GF2Vector data = new GF2Vector(dataLen);
+
+        IntStream.range(0, amount)
+                .forEach(i -> IntStream.range(0, dataBits)
+                        .filter(j -> vec.getBit(i * bits + j) != 0)
+                        .filter(j -> i * dataBits + j < dataLen)
+                        .forEach(j -> data.setBit(i * dataBits + j)));
+
+        return data;
+    }
+
+    /**
+     * Preprocesses the given {@link GF2Vector} by splitting it into some parts
+     * that fit the current parity check matrix.
+     *
+     * @param len The length to pad to.
+     * @param vec The {@link GF2Vector} to preprocess.
+     * @return Some {@link GF2Vector}s fitting the current scheme.
+     */
+    private static GF2Vector[] preprocess(int len, GF2Vector vec) {
+        int parts = (int) Math.ceil((double) vec.getLength() / len);
+        GF2Vector[] vectors = new GF2Vector[parts];
+
+        for (int i = 0; i < parts; i++) {
+            int offset = i * len;
+            GF2Vector part = new GF2Vector(len);
+            for (int j = 0; j < len; j++) {
+                int index = offset + j;
+                if (index >= vec.getLength()) {
+                    break;
+                }
+                if (MatrixUtils.getEntry(vec, index)) {
+                    part.setBit(j);
+                }
+            }
+            vectors[i] = part;
+        }
+
+        return vectors;
+    }
+
+    private static GF2Vector postprocess(GF2Vector[] vectors) {
+        int length = Arrays.stream(vectors).mapToInt(Vector::getLength).sum();
+        GF2Vector result = new GF2Vector(length);
+
+        for (int i = 0; i < vectors.length; i++) {
+            GF2Vector vec = vectors[i];
+            int len = vec.getLength();
+            int offset = i * len;
+            IntStream.range(0, len)
+                    .filter(j -> getEntry(vec, j))
+                    .forEach(j -> result.setBit(offset + j));
+        }
+
+        return result;
+    }
+
+    /**
+     * Encodes the given binary message using this LDPC instance (pads if
+     * necessary).
      *
      * @param msg The message to encode.
      * @return The encoded message as boolean/binary matrix.
      */
     public GF2Vector encode(GF2Vector msg) {
-        return (GF2Vector) g.leftMultiply(msg);
+        return postprocess(Arrays.stream(preprocess(g.getNumRows(), msg))
+                .map(v -> (GF2Vector) g.leftMultiply(v))
+                .toArray(GF2Vector[]::new));
     }
 
     /**
@@ -168,14 +280,13 @@ public class LDPC {
      * @return The possibly decoded message.
      */
     public GF2Vector decode(GF2Vector message) {
-        int n = h.getNumColumns();
-
-        double[] msg = new double[n];
-        for (int i = 0; i < n; i++) {
-            msg[i] = getLLR(getEntry(message, i));
-        }
-
-        return decode(msg);
+        int n = g.getNumColumns();
+        return postprocess(Arrays.stream(preprocess(n, message))
+                .map(v -> IntStream.range(0, n)
+                        .mapToDouble(i -> getLLR(getEntry(v, i)))
+                        .toArray())
+                .map(this::decode)
+                .toArray(GF2Vector[]::new));
     }
 
     /**
