@@ -356,7 +356,8 @@ public class LDPC {
      *         {@link #bitflipChance}.
      */
     public double getLLR(double value) {
-        return Math.log(Math.abs((1 - bitflipChance - value) / (bitflipChance - value)));
+        return Math.log(Math.abs((1 - bitflipChance - value)
+                / (bitflipChance - value)));
     }
 
     /**
