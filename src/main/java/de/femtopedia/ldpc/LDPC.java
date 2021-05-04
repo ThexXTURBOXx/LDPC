@@ -41,6 +41,12 @@ public class LDPC {
     private final GF2Matrix h;
 
     /**
+     * The file prefix to print MATLAB matrices to.
+     */
+    @Getter
+    private final String filePrefix;
+
+    /**
      * The chance of a bitflip occurring.
      */
     @Getter
@@ -55,14 +61,19 @@ public class LDPC {
     private int maxIterations;
 
     /**
-     * The file prefix to print MATLAB matrices to.
-     */
-    private final String filePrefix;
-
-    /**
      * The current iteration count for printing MATLAB matrices.
      */
     private int iteration = 0;
+
+    /**
+     * The column-indexed adjacency matrix.
+     */
+    private final List<Integer>[] colAdj;
+
+    /**
+     * The row-indexed adjacency matrix.
+     */
+    private final List<Integer>[] rowAdj;
 
     /**
      * Initializes the LDPC instance using the given parity check matrix.
@@ -121,8 +132,24 @@ public class LDPC {
      * @param h             The parity check matrix to use.
      * @param bitflipChance The chance of a bitflip occurring.
      * @param maxIterations The maximum iterations for the algorithm.
+     */
+    public LDPC(GF2Matrix g, GF2Matrix h, double bitflipChance,
+                int maxIterations) {
+        this(g, h, bitflipChance, maxIterations, null);
+    }
+
+    /**
+     * Initializes the LDPC instance using the given parity check matrix,
+     * bitflip chance and maximum amount of iterations for the algorithm using
+     * the given pre-computed generator matrix without checking its validity.
+     *
+     * @param g             The pre-computed generator matrix to use.
+     * @param h             The parity check matrix to use.
+     * @param bitflipChance The chance of a bitflip occurring.
+     * @param maxIterations The maximum iterations for the algorithm.
      * @param filePrefix    The file prefix to print MATLAB matrices to.
      */
+    @SuppressWarnings("unchecked")
     public LDPC(GF2Matrix g, GF2Matrix h, double bitflipChance,
                 int maxIterations, String filePrefix) {
         this.g = g;
@@ -130,6 +157,10 @@ public class LDPC {
         this.bitflipChance = bitflipChance;
         this.maxIterations = maxIterations;
         this.filePrefix = filePrefix;
+
+        colAdj = new List[h.getNumColumns()];
+        rowAdj = new List[h.getNumRows()];
+        initAdjacencyMatrices(colAdj, rowAdj);
     }
 
     /**
@@ -146,6 +177,58 @@ public class LDPC {
         Matrix a = getColumns(h, 0, k).computeTranspose();
         Matrix b = getColumns(h, k, n).computeTranspose().computeInverse();
         return ((GF2Matrix) a.rightMultiply(b)).extendRightCompactForm();
+    }
+
+    /**
+     * Initializes the adjacency matrices from the parity check matrix
+     * {@link #h}.
+     *
+     * @param colAdj The set saving for every column n its indices of 1's.
+     * @param rowAdj The set saving for every row m its indices of 1's.
+     */
+    private void initAdjacencyMatrices(List<Integer>[] colAdj,
+                                       List<Integer>[] rowAdj) {
+        int n = h.getNumColumns();
+
+        for (int i = 0; i < n; i++) {
+            colAdj[i] = new ArrayList<>();
+        }
+        for (int i = 0; i < h.getNumRows(); i++) {
+            rowAdj[i] = new ArrayList<>();
+            for (int j = 0; j < n; j++) {
+                if (getEntry(h, i, j)) {
+                    colAdj[j].add(i);
+                    rowAdj[i].add(j);
+                }
+            }
+        }
+    }
+
+    /**
+     * Returns the number of bits that an encoded message consists of.
+     *
+     * @return The number of bits in an encoded message.
+     */
+    public int getEncodedBits() {
+        return g.getNumColumns();
+    }
+
+    /**
+     * Returns the number of message bits in an encoded message.
+     *
+     * @return The number of message bits in an encoded message.
+     */
+    public int getMessageBits() {
+        return g.getNumRows();
+    }
+
+    /**
+     * Returns the number of parity bits in an encoded message.
+     *
+     * @return The number of parity bits in an encoded message.
+     */
+    public int getParityBits() {
+        return h.getNumRows();
     }
 
     /**
@@ -184,8 +267,8 @@ public class LDPC {
 
         IntStream.range(0, amount)
                 .forEach(i -> IntStream.range(0, dataBits)
-                        .filter(j -> vec.getBit(i * bits + j) != 0)
                         .filter(j -> i * dataBits + j < dataLen)
+                        .filter(j -> vec.getBit(i * bits + j) != 0)
                         .forEach(j -> data.setBit(i * dataBits + j)));
 
         return data;
@@ -199,10 +282,13 @@ public class LDPC {
      * @param vec The {@link GF2Vector} to preprocess.
      * @return Some {@link GF2Vector}s fitting the current scheme.
      */
-    private static GF2Vector[] preprocess(int len, GF2Vector vec) {
+    private GF2Vector[] preprocess(int len, GF2Vector vec) {
+        if (len == vec.getLength()) {
+            return new GF2Vector[]{vec};
+        }
+
         int parts = (int) Math.ceil((double) vec.getLength() / len);
         GF2Vector[] vectors = new GF2Vector[parts];
-
         for (int i = 0; i < parts; i++) {
             int offset = i * len;
             GF2Vector part = new GF2Vector(len);
@@ -217,14 +303,16 @@ public class LDPC {
             }
             vectors[i] = part;
         }
-
         return vectors;
     }
 
-    private static GF2Vector postprocess(GF2Vector[] vectors) {
+    private GF2Vector postprocess(GF2Vector[] vectors) {
         int length = Arrays.stream(vectors).mapToInt(Vector::getLength).sum();
-        GF2Vector result = new GF2Vector(length);
+        if (vectors.length == 1 && length == h.getNumColumns()) {
+            return vectors[0];
+        }
 
+        GF2Vector result = new GF2Vector(length);
         for (int i = 0; i < vectors.length; i++) {
             GF2Vector vec = vectors[i];
             int len = vec.getLength();
@@ -233,7 +321,6 @@ public class LDPC {
                     .filter(j -> getEntry(vec, j))
                     .forEach(j -> result.setBit(offset + j));
         }
-
         return result;
     }
 
@@ -269,7 +356,7 @@ public class LDPC {
      *         {@link #bitflipChance}.
      */
     public double getLLR(double value) {
-        return Math.log((1 - bitflipChance - value) / (bitflipChance - value));
+        return Math.log(Math.abs((1 - bitflipChance - value) / (bitflipChance - value)));
     }
 
     /**
@@ -296,15 +383,10 @@ public class LDPC {
      * @param msg The message to decode.
      * @return The possibly decoded message.
      */
-    @SuppressWarnings("unchecked")
     public GF2Vector decode(double[] msg) {
-        Matrix hTrans = h.computeTranspose();
+        System.out.println(Arrays.toString(msg));
         int m = h.getNumRows();
         int n = h.getNumColumns();
-
-        List<Integer>[] colAdj = new List[n];
-        List<Integer>[] rowAdj = new List[m];
-        initAdjacencyMatrices(colAdj, rowAdj);
 
         double[][] toCheckNodes = new double[m][n];
         double[][] fromCheckNodes = new double[m][n];
@@ -312,7 +394,7 @@ public class LDPC {
 
         int iter = 0;
         GF2Vector estimate = decisionStep(msg);
-        Vector syndrome = hTrans.leftMultiply(estimate);
+        Vector syndrome = h.rightMultiply(estimate);
         while (iter++ < maxIterations && !syndrome.isZero()) {
             // Step (i)
             updateSymbolNodes(rowAdj, toCheckNodes, fromCheckNodes);
@@ -323,41 +405,16 @@ public class LDPC {
 
             // Step (iii)
             estimate = decisionStep(estimateLLR);
-            syndrome = hTrans.leftMultiply(estimate);
+            syndrome = h.rightMultiply(estimate);
         }
 
         return estimate;
     }
 
     /**
-     * Initializes the adjacency matrices from the parity check matrix
-     * {@link #h}.
-     *
-     * @param colAdj The set saving for every column n its indices of 1's.
-     * @param rowAdj The set saving for every row m its indices of 1's.
-     */
-    private void initAdjacencyMatrices(List<Integer>[] colAdj,
-                                       List<Integer>[] rowAdj) {
-        int n = h.getNumColumns();
-
-        for (int i = 0; i < n; i++) {
-            colAdj[i] = new ArrayList<>();
-        }
-        for (int i = 0; i < h.getNumRows(); i++) {
-            rowAdj[i] = new ArrayList<>();
-            for (int j = 0; j < n; j++) {
-                if (getEntry(h, i, j)) {
-                    colAdj[j].add(i);
-                    rowAdj[i].add(j);
-                }
-            }
-        }
-    }
-
-    /**
      * Initializes the check node values.
      *
-     * @param rowAdj  The set saving for every row m its indices of 1's.
+     * @param rowAdj  The set saving for every row its indices of 1's.
      * @param ingoing The ingoing messages to the check nodes.
      * @param msg     The originally received message.
      */
