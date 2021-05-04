@@ -37,8 +37,8 @@ public final class Test {
         GF2Matrix g = LDPCGenerator.readBinaryMatrix(
                 Paths.get("demonstration", "G"));
 
-        if (h == null) {
-            System.out.println("The parsed alist file is not valid.");
+        if (h == null || g == null) {
+            System.out.println("A parsed matrix is not valid.");
             return;
         }
 
