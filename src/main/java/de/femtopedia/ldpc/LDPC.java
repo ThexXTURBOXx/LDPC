@@ -193,7 +193,7 @@ public class LDPC {
         for (int i = 0; i < n; i++) {
             colAdj[i] = new ArrayList<>();
         }
-        for (int i = 0; i < h.getNumRows(); i++) {
+        for (int i = 0; i < getParityBits(); i++) {
             rowAdj[i] = new ArrayList<>();
             for (int j = 0; j < n; j++) {
                 if (getEntry(h, i, j)) {
@@ -238,8 +238,8 @@ public class LDPC {
      * @return The extracted data vector.
      */
     public GF2Vector extractData(GF2Vector vec) {
-        int dataBits = g.getNumRows();
-        int bits = dataBits + h.getNumRows();
+        int dataBits = getMessageBits();
+        int bits = dataBits + getParityBits();
         int amount = vec.getLength() / bits;
         GF2Vector data = new GF2Vector(amount * dataBits);
 
@@ -260,8 +260,8 @@ public class LDPC {
      * @return The extracted data vector.
      */
     public GF2Vector extractData(GF2Vector vec, int dataLen) {
-        int dataBits = g.getNumRows();
-        int bits = dataBits + h.getNumRows();
+        int dataBits = getMessageBits();
+        int bits = dataBits + getParityBits();
         int amount = vec.getLength() / bits;
         GF2Vector data = new GF2Vector(dataLen);
 
@@ -306,6 +306,13 @@ public class LDPC {
         return vectors;
     }
 
+    /**
+     * Postprocesses the given {@link GF2Vector}s by extracting their data and
+     * concatenating them to a data {@link GF2Vector}.
+     *
+     * @param vectors The {@link GF2Vector}s to process.
+     * @return The extracted and concatenated data.
+     */
     private GF2Vector postprocess(GF2Vector[] vectors) {
         int length = Arrays.stream(vectors).mapToInt(Vector::getLength).sum();
         if (vectors.length == 1 && length == h.getNumColumns()) {
@@ -329,10 +336,10 @@ public class LDPC {
      * necessary).
      *
      * @param msg The message to encode.
-     * @return The encoded message as boolean/binary matrix.
+     * @return The encoded message as boolean/binary vector.
      */
     public GF2Vector encode(GF2Vector msg) {
-        return postprocess(Arrays.stream(preprocess(g.getNumRows(), msg))
+        return postprocess(Arrays.stream(preprocess(getMessageBits(), msg))
                 .map(v -> (GF2Vector) g.leftMultiply(v))
                 .toArray(GF2Vector[]::new));
     }
@@ -368,7 +375,7 @@ public class LDPC {
      * @return The possibly decoded message.
      */
     public GF2Vector decode(GF2Vector message) {
-        int n = g.getNumColumns();
+        int n = getEncodedBits();
         return postprocess(Arrays.stream(preprocess(n, message))
                 .map(v -> IntStream.range(0, n)
                         .mapToDouble(i -> getLLR(getEntry(v, i)))
@@ -385,24 +392,23 @@ public class LDPC {
      * @return The possibly decoded message.
      */
     public GF2Vector decode(double[] msg) {
-        System.out.println(Arrays.toString(msg));
-        int m = h.getNumRows();
+        int m = getParityBits();
         int n = h.getNumColumns();
 
         double[][] toCheckNodes = new double[m][n];
         double[][] fromCheckNodes = new double[m][n];
-        initCheckNodes(rowAdj, toCheckNodes, msg);
+        initCheckNodes(toCheckNodes, msg);
 
         int iter = 0;
         GF2Vector estimate = decisionStep(msg);
         Vector syndrome = h.rightMultiply(estimate);
         while (iter++ < maxIterations && !syndrome.isZero()) {
             // Step (i)
-            updateSymbolNodes(rowAdj, toCheckNodes, fromCheckNodes);
+            updateSymbolNodes(toCheckNodes, fromCheckNodes);
 
             // Step (ii)
-            updateCheckNodes(colAdj, toCheckNodes, fromCheckNodes, msg);
-            double[] estimateLLR = getEstimate(colAdj, fromCheckNodes, msg);
+            updateCheckNodes(toCheckNodes, fromCheckNodes, msg);
+            double[] estimateLLR = getEstimate(fromCheckNodes, msg);
 
             // Step (iii)
             estimate = decisionStep(estimateLLR);
@@ -415,13 +421,11 @@ public class LDPC {
     /**
      * Initializes the check node values.
      *
-     * @param rowAdj  The set saving for every row its indices of 1's.
      * @param ingoing The ingoing messages to the check nodes.
      * @param msg     The originally received message.
      */
-    private void initCheckNodes(List<Integer>[] rowAdj, double[][] ingoing,
-                                double[] msg) {
-        for (int i = 0; i < h.getNumRows(); i++) {
+    private void initCheckNodes(double[][] ingoing, double[] msg) {
+        for (int i = 0; i < getParityBits(); i++) {
             for (int j : rowAdj[i]) {
                 ingoing[i][j] = msg[j];
             }
@@ -431,13 +435,11 @@ public class LDPC {
     /**
      * Updates the symbol nodes' values.
      *
-     * @param rowAdj   The set saving for every row m its indices of 1's.
      * @param ingoing  The ingoing messages to the check nodes.
      * @param outgoing The outgoing messages from the check nodes.
      */
-    private void updateSymbolNodes(List<Integer>[] rowAdj, double[][] ingoing,
-                                   double[][] outgoing) {
-        for (int i = 0; i < h.getNumRows(); i++) {
+    private void updateSymbolNodes(double[][] ingoing, double[][] outgoing) {
+        for (int i = 0; i < getParityBits(); i++) {
             for (int j : rowAdj[i]) {
                 double prod = 1;
                 for (int k : rowAdj[i]) {
@@ -453,13 +455,12 @@ public class LDPC {
     /**
      * Updates the check nodes' values.
      *
-     * @param colAdj   The set saving for every column n its indices of 1's.
      * @param ingoing  The ingoing messages to the check nodes.
      * @param outgoing The outgoing messages from the check nodes.
      * @param msg      The originally received message.
      */
-    private void updateCheckNodes(List<Integer>[] colAdj, double[][] ingoing,
-                                  double[][] outgoing, double[] msg) {
+    private void updateCheckNodes(double[][] ingoing, double[][] outgoing,
+                                  double[] msg) {
         for (int j = 0; j < h.getNumColumns(); j++) {
             for (int i : colAdj[j]) {
                 double sum = 0;
@@ -477,13 +478,11 @@ public class LDPC {
      * Returns an estimate of the decoded matrix based on the current nodes'
      * values.
      *
-     * @param colAdj   The set saving for every column n its indices of 1's.
      * @param outgoing The outgoing messages from the check nodes.
      * @param msg      The originally received message.
      * @return The current LLR value estimate.
      */
-    private double[] getEstimate(List<Integer>[] colAdj, double[][] outgoing,
-                                 double[] msg) {
+    private double[] getEstimate(double[][] outgoing, double[] msg) {
         int n = h.getNumColumns();
 
         double[] l = new double[n];

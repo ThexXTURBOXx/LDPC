@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.stream.IntStream;
 import org.bouncycastle.pqc.math.linearalgebra.GF2Matrix;
 import org.bouncycastle.pqc.math.linearalgebra.GF2Vector;
 import org.bouncycastle.pqc.math.linearalgebra.LittleEndianConversions;
@@ -59,6 +60,35 @@ public final class LDPCGenerator {
     }
 
     /**
+     * Reads a sparse Matrix from the given alist-file in non-standard format.
+     *
+     * @param path The path to the alist file.
+     * @return The parsed {@link GF2Matrix}.
+     */
+    public static GF2Matrix readNonStandardAList(Path path) {
+        try (BufferedReader reader = Files.newBufferedReader(path)) {
+            int cols = Integer.parseInt(reader.readLine());
+            int rows = Integer.parseInt(reader.readLine());
+            // Ignore
+            reader.readLine();
+
+            GF2Matrix mat = zero(rows, cols);
+            for (int row = 0; row < rows; row++) {
+                String line = reader.readLine();
+                final int i = row;
+                Arrays.stream(line.split("\\s+"))
+                        .mapToInt(Integer::parseInt)
+                        .filter(j -> j > 0)
+                        .forEach(j -> setBit(mat, i, j - 1));
+            }
+            return mat;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    /**
      * Reads the {@link GF2Matrix} from the given {@link Path}.
      *
      * @param path The {@link Path} to read from.
@@ -75,10 +105,10 @@ public final class LDPCGenerator {
     }
 
     /**
-     * Reads the {@link GF2Matrix} from the given {@link Path}.
+     * Reads the {@link GF2Vector} from the given {@link Path}.
      *
      * @param path The {@link Path} to read from.
-     * @return The parsed {@link GF2Matrix}.
+     * @return The parsed {@link GF2Vector}.
      */
     public static GF2Vector readBinaryVector(Path path) {
         GF2Vector vector = null;
@@ -86,6 +116,26 @@ public final class LDPCGenerator {
             byte[] bytes = Files.readAllBytes(path);
             vector = GF2Vector.OS2VP(LittleEndianConversions.OS2IP(bytes, 0),
                     Arrays.copyOfRange(bytes, 4, bytes.length));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return vector;
+    }
+
+    /**
+     * Reads the {@link GF2Vector} from the given {@link Path}.
+     *
+     * @param path The {@link Path} to read from.
+     * @return The parsed {@link GF2Vector}.
+     */
+    public static GF2Vector readAsciiBinaryVector(Path path) {
+        GF2Vector vector = null;
+        try {
+            String lines = String.join("", Files.readAllLines(path));
+            vector = new GF2Vector(lines.length());
+            IntStream.range(0, lines.length())
+                    .filter(i -> lines.charAt(i) == '1')
+                    .forEach(vector::setBit);
         } catch (IOException e) {
             e.printStackTrace();
         }
