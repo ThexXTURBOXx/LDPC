@@ -1,8 +1,14 @@
 package de.femtopedia.ldpc.util;
 
+import de.femtopedia.ldpc.LDPC;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -262,6 +268,34 @@ public final class MatrixUtils {
             }
             printStream.println(";");
         }
+    }
+
+    /**
+     * Provides an {@link LDPC.IterationCallback} which prints the new vector
+     * into MATLAB format after each iteration.
+     */
+    public static class MatlabPrinter implements LDPC.IterationCallback {
+
+        private final String filePrefix;
+
+        private int globalIter;
+
+        public MatlabPrinter(String filePrefix) {
+            this.filePrefix = filePrefix;
+            this.globalIter = 0;
+        }
+
+        @Override
+        public void onIteration(int iteration, GF2Vector data, double[] llr) {
+            Path path = Paths.get(filePrefix + globalIter++ + ".m");
+            try (OutputStream stream = Files.newOutputStream(path);
+                 PrintStream printer = new PrintStream(stream)) {
+                print(printer, "TEMP" + iteration, data);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
     }
 
 }

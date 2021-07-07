@@ -1,5 +1,6 @@
 package de.femtopedia.ldpc;
 
+import de.femtopedia.ldpc.util.MatrixUtils;
 import java.nio.file.Paths;
 import java.util.SplittableRandom;
 import java.util.stream.Collectors;
@@ -45,7 +46,8 @@ public final class Test {
         // For some reason, the matrix has to be transposed beforehand.
         h = (GF2Matrix) h.computeTranspose();
 
-        LDPC ldpc = new LDPC(g, h, 0.1, 20, "pic");
+        LDPC ldpc = new LDPC(g, h, 0.1, 20,
+                new MatrixUtils.MatlabPrinter("pic"));
         GF2Vector msg = toVec(PICTURE);
         GF2Vector encoded = ldpc.encode(msg);
 

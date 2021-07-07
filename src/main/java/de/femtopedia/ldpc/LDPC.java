@@ -1,12 +1,6 @@
 package de.femtopedia.ldpc;
 
 import de.femtopedia.ldpc.util.MatrixUtils;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.PrintStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -20,7 +14,6 @@ import org.bouncycastle.pqc.math.linearalgebra.Vector;
 
 import static de.femtopedia.ldpc.util.MatrixUtils.getColumns;
 import static de.femtopedia.ldpc.util.MatrixUtils.getEntry;
-import static de.femtopedia.ldpc.util.MatrixUtils.print;
 
 /**
  * Provides LDPC code functionality using the {@link GF2Matrix} class and the
@@ -41,10 +34,10 @@ public class LDPC {
     private final GF2Matrix h;
 
     /**
-     * The file prefix to print MATLAB matrices to.
+     * The consumer being called after each iteration of the decoder.
      */
     @Getter
-    private final String filePrefix;
+    private final IterationCallback consumer;
 
     /**
      * The chance of a bitflip occurring.
@@ -59,11 +52,6 @@ public class LDPC {
     @Getter
     @Setter
     private int maxIterations;
-
-    /**
-     * The current iteration count for printing MATLAB matrices.
-     */
-    private int iteration = 0;
 
     /**
      * The column-indexed adjacency matrix.
@@ -115,12 +103,13 @@ public class LDPC {
      * @param h             The parity check matrix to use.
      * @param bitflipChance The chance of a bitflip occurring.
      * @param maxIterations The maximum iterations for the algorithm.
-     * @param filePrefix    The file prefix to print MATLAB matrices to.
+     * @param consumer      The consumer being called after each iteration of
+     *                      the decoder.
      */
     public LDPC(GF2Matrix h, double bitflipChance, int maxIterations,
-                String filePrefix) {
+                IterationCallback consumer) {
         this(getGeneratorMatrix(h), h,
-                bitflipChance, maxIterations, filePrefix);
+                bitflipChance, maxIterations, consumer);
     }
 
     /**
@@ -147,16 +136,17 @@ public class LDPC {
      * @param h             The parity check matrix to use.
      * @param bitflipChance The chance of a bitflip occurring.
      * @param maxIterations The maximum iterations for the algorithm.
-     * @param filePrefix    The file prefix to print MATLAB matrices to.
+     * @param consumer      The consumer being called after each iteration of
+     *                      the decoder.
      */
     @SuppressWarnings("unchecked")
     public LDPC(GF2Matrix g, GF2Matrix h, double bitflipChance,
-                int maxIterations, String filePrefix) {
+                int maxIterations, IterationCallback consumer) {
         this.g = g;
         this.h = h;
         this.bitflipChance = bitflipChance;
         this.maxIterations = maxIterations;
-        this.filePrefix = filePrefix;
+        this.consumer = consumer;
 
         colAdj = new List[h.getNumColumns()];
         rowAdj = new List[h.getNumRows()];
@@ -400,7 +390,7 @@ public class LDPC {
         initCheckNodes(toCheckNodes, msg);
 
         int iter = 0;
-        GF2Vector estimate = decisionStep(msg);
+        GF2Vector estimate = decisionStep(iter, msg);
         Vector syndrome = h.rightMultiply(estimate);
         while (iter++ < maxIterations && !syndrome.isZero()) {
             // Step (i)
@@ -411,7 +401,7 @@ public class LDPC {
             double[] estimateLLR = getEstimate(fromCheckNodes, msg);
 
             // Step (iii)
-            estimate = decisionStep(estimateLLR);
+            estimate = decisionStep(iter, estimateLLR);
             syndrome = h.rightMultiply(estimate);
         }
 
@@ -501,24 +491,19 @@ public class LDPC {
      * This return value represents the current estimate for the decoded message
      * in binary form.
      *
+     * @param iter      The current iteration count.
      * @param llrValues The LLR values to decide on.
      * @return The current estimate for the decoded message in binary form.
      */
-    private GF2Vector decisionStep(double[] llrValues) {
+    private GF2Vector decisionStep(int iter, double[] llrValues) {
         GF2Vector vec = new GF2Vector(llrValues.length);
         IntStream.range(0, llrValues.length)
                 .filter(i -> llrValues[i] < 0)
                 .forEach(vec::setBit);
 
-        // Print as MATLAB matrix if wanted.
-        if (filePrefix != null) {
-            Path path = Paths.get(filePrefix + iteration++ + ".m");
-            try (OutputStream stream = Files.newOutputStream(path);
-                 PrintStream printer = new PrintStream(stream)) {
-                print(printer, "TEMP", vec);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+        // Call consumer if available
+        if (consumer != null) {
+            consumer.onIteration(iter, vec, llrValues);
         }
 
         return vec;
@@ -532,6 +517,23 @@ public class LDPC {
      */
     private static double atanh(double x) {
         return Math.log((1 + x) / (1 - x)) / 2;
+    }
+
+    /**
+     * Provides a consumer which is being called after each iteration of the
+     * decoding algorithm.
+     */
+    public interface IterationCallback {
+
+        /**
+         * Consumes the given parameters and executes an action.
+         *
+         * @param iteration The current iteration count.
+         * @param data      The new data after the decision step.
+         * @param llr       The current LLR Values before the decision step.
+         */
+        void onIteration(int iteration, GF2Vector data, double[] llr);
+
     }
 
 }
