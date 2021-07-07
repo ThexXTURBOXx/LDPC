@@ -276,15 +276,29 @@ public final class MatrixUtils {
      */
     public static class MatlabPrinter implements LDPC.IterationCallback {
 
+        /**
+         * The file prefix to print to.
+         */
         private final String filePrefix;
 
+        /**
+         * The current global iteration count of this consumer instance.
+         */
         private int globalIter;
 
+        /**
+         * Constructs a new MATLAB printer consumer.
+         *
+         * @param filePrefix The file prefix to print to.
+         */
         public MatlabPrinter(String filePrefix) {
             this.filePrefix = filePrefix;
             this.globalIter = 0;
         }
 
+        /**
+         * {@inheritDoc}
+         */
         @Override
         public void onIteration(int iteration, GF2Vector data, double[] llr) {
             Path path = Paths.get(filePrefix + globalIter++ + ".m");
