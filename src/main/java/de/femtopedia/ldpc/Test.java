@@ -4,8 +4,8 @@ import de.femtopedia.ldpc.util.MatrixUtils;
 import java.nio.file.Paths;
 import java.util.SplittableRandom;
 import java.util.stream.Collectors;
-import org.bouncycastle.pqc.math.linearalgebra.GF2Matrix;
-import org.bouncycastle.pqc.math.linearalgebra.GF2Vector;
+import org.bouncycastle.pqc.legacy.math.linearalgebra.GF2Matrix;
+import org.bouncycastle.pqc.legacy.math.linearalgebra.GF2Vector;
 
 import static de.femtopedia.ldpc.util.MatrixUtils.addNoise;
 import static de.femtopedia.ldpc.util.MatrixUtils.print;

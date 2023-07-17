@@ -6,9 +6,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.stream.IntStream;
-import org.bouncycastle.pqc.math.linearalgebra.GF2Matrix;
-import org.bouncycastle.pqc.math.linearalgebra.GF2Vector;
-import org.bouncycastle.pqc.math.linearalgebra.LittleEndianConversions;
+import org.bouncycastle.pqc.legacy.math.linearalgebra.GF2Matrix;
+import org.bouncycastle.pqc.legacy.math.linearalgebra.GF2Vector;
+import org.bouncycastle.pqc.legacy.math.linearalgebra.LittleEndianConversions;
 
 import static de.femtopedia.ldpc.util.MatrixUtils.setBit;
 import static de.femtopedia.ldpc.util.MatrixUtils.zero;

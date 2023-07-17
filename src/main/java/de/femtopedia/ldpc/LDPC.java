@@ -7,10 +7,10 @@ import java.util.List;
 import java.util.stream.IntStream;
 import lombok.Getter;
 import lombok.Setter;
-import org.bouncycastle.pqc.math.linearalgebra.GF2Matrix;
-import org.bouncycastle.pqc.math.linearalgebra.GF2Vector;
-import org.bouncycastle.pqc.math.linearalgebra.Matrix;
-import org.bouncycastle.pqc.math.linearalgebra.Vector;
+import org.bouncycastle.pqc.legacy.math.linearalgebra.GF2Matrix;
+import org.bouncycastle.pqc.legacy.math.linearalgebra.GF2Vector;
+import org.bouncycastle.pqc.legacy.math.linearalgebra.Matrix;
+import org.bouncycastle.pqc.legacy.math.linearalgebra.Vector;
 
 import static de.femtopedia.ldpc.util.MatrixUtils.getColumns;
 import static de.femtopedia.ldpc.util.MatrixUtils.getEntry;

@@ -13,8 +13,8 @@ import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.bouncycastle.pqc.math.linearalgebra.GF2Matrix;
-import org.bouncycastle.pqc.math.linearalgebra.GF2Vector;
+import org.bouncycastle.pqc.legacy.math.linearalgebra.GF2Matrix;
+import org.bouncycastle.pqc.legacy.math.linearalgebra.GF2Vector;
 
 /**
  * Helper class providing access to some operations on {@link GF2Vector}s and
@@ -174,9 +174,9 @@ public final class MatrixUtils {
             constructor.setAccessible(true);
             return constructor.newInstance(rows, cols);
         } catch (NoSuchMethodException
-                | IllegalAccessException
-                | InstantiationException
-                | InvocationTargetException e) {
+                 | IllegalAccessException
+                 | InstantiationException
+                 | InvocationTargetException e) {
             throw new IllegalStateException("Can't access constructor");
         }
     }
