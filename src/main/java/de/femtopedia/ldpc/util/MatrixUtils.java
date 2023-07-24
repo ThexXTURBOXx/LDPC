@@ -93,6 +93,46 @@ public final class MatrixUtils {
     }
 
     /**
+     * Sets the given bit to the given value in the given {@link GF2Vector}.
+     *
+     * @param vec   The {@link GF2Vector} to modify.
+     * @param index The index to modify.
+     * @param value The value to set the entry to.
+     */
+    public static void setEntry(GF2Vector vec, int index, int value) {
+        setEntry(vec, index, value != 0);
+    }
+
+    /**
+     * Sets the given bit to the given value in the given {@link GF2Vector}.
+     *
+     * @param vec   The {@link GF2Vector} to modify.
+     * @param index The index to modify.
+     * @param value The value to set the entry to.
+     */
+    public static void setEntry(GF2Vector vec, int index, boolean value) {
+        if (value) {
+            vec.setBit(index);
+        } else {
+            clearBit(vec, index);
+        }
+    }
+
+    /**
+     * Clears given bit in the given {@link GF2Vector}.
+     *
+     * @param vec   The {@link GF2Vector} to modify.
+     * @param index The index to modify.
+     */
+    public static void clearBit(GF2Vector vec, int index) {
+        if (index >= vec.getLength()) {
+            throw new IndexOutOfBoundsException();
+        } else {
+            vec.getVecArray()[index >> 5] &= ~(1 << (index & 31));
+        }
+    }
+
+    /**
      * Returns the boolean entry from the given {@link GF2Vector} at the given
      * position.
      *
