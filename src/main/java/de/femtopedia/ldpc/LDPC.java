@@ -195,27 +195,27 @@ public class LDPC {
     }
 
     /**
-     * Returns the number of bits that an encoded message consists of.
+     * Returns the number of bits that an encoded message consists of (n).
      *
-     * @return The number of bits in an encoded message.
+     * @return The number of bits in an encoded message (n).
      */
     public int getEncodedBits() {
         return g.getNumColumns();
     }
 
     /**
-     * Returns the number of message bits in an encoded message.
+     * Returns the number of message bits in an encoded message (k).
      *
-     * @return The number of message bits in an encoded message.
+     * @return The number of message bits in an encoded message (k).
      */
     public int getMessageBits() {
         return g.getNumRows();
     }
 
     /**
-     * Returns the number of parity bits in an encoded message.
+     * Returns the number of parity bits in an encoded message (n-k).
      *
-     * @return The number of parity bits in an encoded message.
+     * @return The number of parity bits in an encoded message (n-k).
      */
     public int getParityBits() {
         return h.getNumRows();
